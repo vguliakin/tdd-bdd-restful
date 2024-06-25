@@ -26,6 +26,7 @@ Test cases can be run with the following:
 """
 import os
 import logging
+from urllib.parse import quote_plus
 from decimal import Decimal
 from unittest import TestCase
 from service import app
@@ -178,3 +179,94 @@ class TestProductRoutes(TestCase):
         data = response.get_json()
         # logging.debug("data = %s", data)
         return len(data)
+    
+    def test_get_a_product(self):
+        """ It should get a product """
+        product = self._create_products(1)[0]
+        response = self.client.get(BASE_URL + f"/{product.id}")
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        data = response.get_json()
+
+        self.assertEqual(data["name"], product.name)
+
+    def test_get_a_product_with_not_found(self):
+        """ It should return a 404 status code """
+        product = self._create_products(1)[0]
+        
+        self.assertIsNotNone(Product.find(product.id))
+
+        product.id = 0
+        response = self.client.get(BASE_URL + f"/{product.id}")
+        data = response.get_json()
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertIn('was not found', data['message'])
+    
+    def test_update_a_product(self):
+        """ It should Update a product """
+        product = self._create_products(1)[0]
+
+        self.assertIsNotNone(Product.find(product.id))
+        
+        product.name = "Kok"
+        response = self.client.put(BASE_URL + f"/{product.id}", json=product.serialize())
+        data = response.get_json()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(product.name, data["name"])
+    
+    def test_update_a_product_that_not_found(self):
+        """ It should show error message Not Found """
+        product = self._create_products(1)[0]
+        product.id = 0
+        
+        product.name = "Kok"
+        response = self.client.put(BASE_URL + f"/{product.id}", json=product.serialize())
+        data = response.get_json()
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertIn("was not found", data["message"])
+
+    def test_delete_a_product(self):
+        """ It should delete a product """
+        product = self._create_products(1)[0]
+
+        self.assertEqual(len(Product.all()), 1)
+
+        response = self.client.delete(BASE_URL + f"/{product.id}")
+        data = response.get_json()
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+        response = self.client.get(BASE_URL + f"/{product.id}")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+    
+    def test_get_list_all_products(self):
+        """ It should get list all of products """
+        products = self._create_products(5)
+
+        self.assertEqual(len(Product.all()), 5)
+
+        response = self.client.get(BASE_URL)
+        data = response.get_json()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(data), 5)
+    
+    def test_get_list_products_by_name(self):
+        """ It should get list of products by name """
+        products = self._create_products(5)
+        test_name = products[0].name
+        name_count = len([product for product in products if product.name == test_name])
+
+        self.assertEqual(len(Product.all()), 5)
+
+        response = self.client.get(BASE_URL, query_string=f"name={quote_plus(test_name)}")
+        data = response.get_json()
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(data), name_count)
+
